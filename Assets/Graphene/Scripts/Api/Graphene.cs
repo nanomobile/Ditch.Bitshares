@@ -10,6 +10,7 @@ using Ditch.BitShares.Models;
 using Cryptography.ECDSA;
 using UnityEngine.UI;
 using System.Text.RegularExpressions;
+using System;
 
 namespace Nano.Blockchain {
 	public class Graphene : MonoBehaviour {
@@ -24,6 +25,8 @@ namespace Nano.Blockchain {
         public List<string> errors;
 
         public GameObject panelInfo;
+
+        public Text textPanelInfo;
 
         private bool isAccountNameCorrect = false;
 
@@ -72,19 +75,23 @@ namespace Nano.Blockchain {
                 Ditch.Core.Base58.DecodePrivateWif("5JMCfREHnK4x5tPjruhEHJKX6wQDVBJFzikc1wxEBQ4iFTcHgMY")
             };
 
-            string NewUserName = inputAccountName.text;
+            var privateKey = Security.Cryptography.RandomSha.GenerateRandomKey();
 
-            //var privateKey = Secp256K1Manager.GenerateRandomKey();
+            Debug.Log("PRIVATE KEY = " + Hex.ToString(privateKey));
 
-            //var privateWif = Ditch.Core.Base58.EncodePrivateWif(privateKey);
+            var privateWif = Ditch.Core.Base58.EncodePrivateWif(privateKey);
 
-            //var subWif = Ditch.Core.Base58.GetSubWif(NewUserName, privateWif, "active");
-            //var pk = Ditch.Core.Base58.DecodePrivateWif(subWif);
-            //var subPublicKey = Secp256K1Manager.GetPublicKey(pk, true);
+            var subWif = Ditch.Core.Base58.GetSubWif(inputAccountName.text, privateWif, "active");
+            var pk = Ditch.Core.Base58.DecodePrivateWif(subWif);
+            var activePubKey = Secp256K1Manager.GetPublicKey(pk, true);
 
-            //subWif = Ditch.Core.Base58.GetSubWif(NewUserName, privateWif, "owner");
-            //pk = Ditch.Core.Base58.DecodePrivateWif(subWif);
-            //var subPublicKey2 = Secp256K1Manager.GetPublicKey(pk, true);
+            Debug.Log("ACTIVE PUB KEY = " + Hex.ToString(activePubKey));
+
+            subWif = Ditch.Core.Base58.GetSubWif(inputAccountName.text, privateWif, "owner");
+            pk = Ditch.Core.Base58.DecodePrivateWif(subWif);
+            var ownerPubKey = Secp256K1Manager.GetPublicKey(pk, true);
+
+            Debug.Log("OWNER PUB KEY = " + Hex.ToString(ownerPubKey));
 
             var accountCreateOp = new AccountCreateOperation
             {
@@ -96,21 +103,26 @@ namespace Nano.Blockchain {
                 Registrar = new ObjectId(1, 2, 22765),
                 Referrer = new ObjectId(1, 2, 22765),
                 ReferrerPercent = 7000,
-                Name = NewUserName,
-                Owner = new Authority(new PublicKeyType("TEST6FcnaaaP7eZWqUs5VHRPMwjD69V1SFAAVoJRHiq3YEJ7tVgyQc", "TEST")),
-                Active = new Authority(new PublicKeyType("TEST6KCYpvc3syCbsRaofXLffEXoLDKixN2SLUCLPz4XubmptGNFfe", "TEST")),
+                Name = inputAccountName.text,
+                Owner = new Authority(new PublicKeyType(ownerPubKey)),
+                Active = new Authority(new PublicKeyType(activePubKey)),
                 Options = new AccountOptions()
                 {
-                    MemoKey = new PublicKeyType("TEST6HWVwXazrgS3MsWZvvSV6qdRbc8GS7KpdfDw8mAcNug4RcPv3v", "TEST"),
+                    MemoKey = new PublicKeyType(activePubKey),
                     VotingAccount = new AccountIdType(1, 2, 5),
                 },
             };
             
             var responce = _operationManager.BroadcastOperations(YouPrivateKeys, CancellationToken.None, accountCreateOp);
 
-            if (false == responce.IsError)
+            panelInfo.SetActive(true);
+            if (responce.IsError)
             {
-                panelInfo.SetActive(true);
+                textPanelInfo.text = responce.GetErrorMessage();
+            }
+            else
+            {
+                textPanelInfo.text = errors[8];
             }
 
             //Debug.Log("RESULT = " + responce.Result);
@@ -174,6 +186,35 @@ namespace Nano.Blockchain {
                 textStatusAccountName.color = Color.green;
                 textStatusAccountName.text = errors[7];
             }
+
+            //CheckIfAccountNameIsAvailable();
+        }
+
+        public void CheckIfAccountNameIsAvailable()
+        {
+            if (false == isAccountNameCorrect && textStatusAccountName.text != errors[2])
+            {
+                return;
+            }
+            
+            //var rez = _operationManager.GetAccountByName(inputAccountName.text, CancellationToken.None);
+
+            var rez = _operationManager.CustomGetRequest(
+                KnownApiNames.DatabaseApi, "get_account_by_name", new object[] { inputAccountName.text, }, CancellationToken.None
+            );
+
+            if (rez.Result != null)
+            {
+                isAccountNameCorrect = false;
+                textStatusAccountName.color = Color.red;
+                textStatusAccountName.text = errors[5];
+            }
+            else
+            {
+                isAccountNameCorrect = true;
+                textStatusAccountName.color = Color.green;
+                textStatusAccountName.text = errors[7];
+            }
         }
 
         private string CheckAllowedLetters(string s)
@@ -188,7 +229,7 @@ namespace Nano.Blockchain {
                 }
             }
 
-            return rez;
+            return rez.ToLower().Substring(0, rez.Length < 63 ? rez.Length : 63);
         }
     }
 }
