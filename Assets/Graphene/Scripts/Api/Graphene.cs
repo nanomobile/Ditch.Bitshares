@@ -10,11 +10,10 @@ using Ditch.BitShares.Models;
 using Cryptography.ECDSA;
 using UnityEngine.UI;
 using System.Text.RegularExpressions;
-using System;
 
 namespace Nano.Blockchain {
 	public class Graphene : MonoBehaviour {
-        public InputField inputAccountName;
+        public InputField inputAccountName, inputAccountPassword;
 
         public Toggle toggle1, toggle2, toggle3;
 
@@ -31,6 +30,8 @@ namespace Nano.Blockchain {
         private bool isAccountNameCorrect = false;
 
         private OperationManager _operationManager;
+
+        private byte[] privateKey;
 
         public void Init()
         {
@@ -49,6 +50,8 @@ namespace Nano.Blockchain {
             ConnectToNode();
 
             CheckAccountNameStatus();
+
+            GeneratePassword();
         }
 
         void Awake()
@@ -66,6 +69,13 @@ namespace Nano.Blockchain {
             Debug.Log(conectedTo);
         }
 
+        private void GeneratePassword()
+        {
+            privateKey = Security.Cryptography.RandomSha.GenerateRandomKey();
+
+            inputAccountPassword.text = "P5K" + Ditch.Core.Base58.EncodePrivateWif(privateKey);
+        }
+
         public void AccountCreate()
         {
             buttonAccountCreate.interactable = false;
@@ -74,8 +84,6 @@ namespace Nano.Blockchain {
             {
                 Ditch.Core.Base58.DecodePrivateWif("5JMCfREHnK4x5tPjruhEHJKX6wQDVBJFzikc1wxEBQ4iFTcHgMY")
             };
-
-            var privateKey = Security.Cryptography.RandomSha.GenerateRandomKey();
 
             Debug.Log("PRIVATE KEY = " + Hex.ToString(privateKey));
 
@@ -114,6 +122,8 @@ namespace Nano.Blockchain {
             };
             
             var responce = _operationManager.BroadcastOperations(YouPrivateKeys, CancellationToken.None, accountCreateOp);
+
+            GeneratePassword();
 
             panelInfo.SetActive(true);
             if (responce.IsError)
